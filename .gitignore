@@ -1,0 +1,17 @@
+# 데이터 및 모델 제외
+postgres_data/
+ollama_models/
+
+# 오디오 및 임시 파일
+*.wav
+*.mp3
+*.m4a
+
+# 파이썬 캐시
+__pycache__/
+
+# 안드로이드 빌드 파일
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties

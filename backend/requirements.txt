@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+requests
+openai-whisper
+gTTS
+python-multipart
+pydantic
+pytz
+sqlalchemy
+psycopg2-binary

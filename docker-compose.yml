@@ -1,0 +1,45 @@
+services:
+  ollama-server:
+    image: ollama/ollama
+    container_name: ollama-server
+    restart: always  # 배포 시 서버가 꺼지면 자동으로 재시작
+    volumes:
+      - ollama_storage:/root/.ollama  # 모델 파일을 내 컴퓨터(Host)에 영구 저장
+    ports:
+      - "11434:11434"
+
+  db:
+    image: postgres:15-alpine
+    container_name: postgres-db
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: voice_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+
+  voice-backend:
+    build: ./backend
+    image: ealz/voice-backend:v3
+    container_name: voice-backend
+    restart: always
+    depends_on:
+      - ollama-server
+      - db
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_HOST=http://ollama-server:11434
+      - DATABASE_URL=postgresql://user:password@db:5432/voice_db
+
+# 모델 데이터를 담아둘 가상 드라이브 정의
+volumes:
+  ollama_storage:
+
+#컨테이너 간 이름을 찾지 못하는 경우를 위해
+networks:
+  default:
+    name: voice-network
