@@ -40,7 +40,8 @@ app.add_middleware(
 # 메모리 절약을 위해 tiny 모델 
 stt_model = whisper.load_model("tiny")
 MODEL_NAME = "llama3:8b"
-OLLAMA_URL = "http://ollama-server:11434/api/generate"
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "localhost")
+OLLAMA_URL = f"http://{OLLAMA_HOST}:11434/api/generate"
 
 class TextRequest(BaseModel):
     text: str
@@ -158,6 +159,10 @@ def get_weather_info(lat, lon):
         data = res.json()
         return f"현재 위치는 {data['name']}이며, {data['weather'][0]['description']}, 온도는 {data['main']['temp']}도입니다."
     except: return "날씨 정보를 불러오는 중 오류가 발생했습니다."
+
+@app.get("/")
+async def root():
+    return {"message": "Server is running", "ollama_endpoint": OLLAMA_URL}
 
 # [chat_stream 엔드포인트]
 # 안드로이드 앱에서 가장 먼저 호출하는 문(Gate)입니다.
