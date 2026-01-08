@@ -36,6 +36,44 @@ services:
       - db
     ports:
       - "8000:8000"
+  
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # 도커 엔진의 로그를 읽기 위해 필수
+    ports:
+      - "8888:8080" # 윈도우 브라우저에서 8888 포트로 접속
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    user: "0"  # WSL2 환경에서 권한 문제를 방지하기 위해 추가
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin # 초기 비밀번호입니다 (아이디: admin)
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml # 방금 만든 설정 파일 연결
+    ports:
+      - "9090:9090" # 윈도우 브라우저 접속 포트
+    restart: unless-stopped
+  
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: postgres-exporter
+    environment:
+      # postgres://사용자:비번@서비스명:5432/DB이름?sslmode=disable
+      - DATA_SOURCE_NAME=postgresql://user:password@db:5432/voice_db?sslmode=disable
+    ports:
+      - "9187:9187"
+    restart: unless-stopped
 
 volumes:
   ollama_storage:
