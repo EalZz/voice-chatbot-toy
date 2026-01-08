@@ -1,4 +1,4 @@
-package com.example.voice_chatbot_cloud
+package com.example.voice_chatbot_ct
 
 import android.net.Uri
 import android.util.Log
@@ -60,12 +60,14 @@ class ChatStreamManager(private val context: Context) {
                     val data = line.substring(6)
                     try {
                         val jsonObject = JSONObject(data)
-                        val token = jsonObject.optString("token", "")
+                        val token = jsonObject.optString("message", "")
                         val isDone = jsonObject.optBoolean("done", false)
-                        val audioUrl = jsonObject.optString("audio_url", "")
+                        val audioUrl = jsonObject.optString("audio_url", null)
 
-                        // 여기서 emit을 호출합니다. flow 빌더 안이므로 안전합니다.
-                        emit(StreamResponse(token, isDone, audioUrl))
+                        // token이 있거나, 혹은 token이 없더라도 isDone이 true라면 emit해야 합니다.
+                        if (token.isNotEmpty() || isDone) {
+                            emit(StreamResponse(token, isDone, audioUrl))
+                        }
                     } catch (e: Exception) {
                         Log.e("ChatStream", "JSON 파싱 에러: ${e.message}")
                     }

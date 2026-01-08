@@ -1,4 +1,4 @@
-package com.example.voice_chatbot_cloud
+package com.example.voice_chatbot_ct
 
 import android.Manifest
 import android.content.Intent
@@ -15,7 +15,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.example.voice_chatbot_cloud.databinding.ActivityMainBinding
+import com.example.voice_chatbot_ct.databinding.ActivityMainBinding
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.*
@@ -129,7 +129,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     }
 
                     if (response.isDone) {
-                        if (fullResponse.isNotBlank()) speak(fullResponse)
+                        Log.d("TTS_DEBUG", "완료 신호 수신됨! 지금까지 쌓인 답변: $fullResponse")
+                        if (fullResponse.isNotBlank()) {
+                            Log.d("TTS_DEBUG", "speak 함수 호출 직전")
+                            speak(fullResponse)
+                        } else {
+                            Log.e("TTS_DEBUG", "답변 내용이 비어있어서 소리를 낼 수 없음")
+                        }
                     }
                 }
             } catch (e: Exception) {

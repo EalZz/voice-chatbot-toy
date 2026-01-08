@@ -1,15 +1,15 @@
 from fastapi import FastAPI
-from prometheus_fastapi_instrumentator import Instrumentator
-from routers import router
+from prometheus_fastapi_instrumentator import Instrumentator # 수정됨
+from routers import router as chat_router
 
-app = FastAPI(title="Voice Chatbot Toy Project")
+app = FastAPI()
 
-# 중요: Instrumentator를 startup 외부로 빼서 '연결 안됨' 에러 해결
+# 프로메테우스 설정 (이 방식이 더 간단하고 강력합니다)
 Instrumentator().instrument(app).expose(app)
 
 # 라우터 등록
-app.include_router(router)
+app.include_router(chat_router)
 
 @app.get("/")
-def health_check():
-    return {"status": "ok", "message": "Voice Chatbot Server is running"}
+async def root():
+    return {"status": "ok", "message": "Voice Chatbot API is running"}

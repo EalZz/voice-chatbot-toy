@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.voice_chatbot_cloud"
+    namespace = "com.example.voice_chatbot_ct"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.voice_chatbot_cloud"
+        applicationId = "com.example.voice_chatbot_ct"
         minSdk = 33
         targetSdk = 34
         versionCode = 1

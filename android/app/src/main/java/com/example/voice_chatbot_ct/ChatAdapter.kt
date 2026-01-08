@@ -1,10 +1,11 @@
-package com.example.voice_chatbot_cloud
+package com.example.voice_chatbot_ct
 
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import com.example.voice_chatbot_ct.R
 
 data class ChatMessage(
     val content: String,
