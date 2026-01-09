@@ -28,7 +28,7 @@
 - **Container:** Docker, Docker Compose
 - **Tunneling:** ngrok (우회 헤더 적용)
 
-## 📂 프로젝트 구조 (Project Structure)
+## 프로젝트 구조 (Project Structure)
 
 ```text
 .
