@@ -1,0 +1,22 @@
+# Web Framework
+fastapi
+uvicorn
+
+# Database
+sqlalchemy
+psycopg2-binary
+
+# Async & HTTP Client (Ollama 통신용)
+httpx
+
+# Monitoring (프로메테우스/그라파나)
+prometheus-fastapi-instrumentator
+
+# Utils
+pydantic
+pytz
+python-multipart
+
+# Voice (필요 시 유지)
+# openai-whisper
+# gTTS

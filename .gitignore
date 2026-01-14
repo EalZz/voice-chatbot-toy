@@ -1,0 +1,7 @@
+*.gguf
+build/
+.gradle/
+.idea/
+bin/
+obj/
+*.bak
