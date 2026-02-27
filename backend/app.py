@@ -164,6 +164,13 @@ def get_weather_info(lat, lon):
 async def root():
     return {"message": "Server is running", "ollama_endpoint": OLLAMA_URL}
 
+# [ping 엔드포인트 (Heartbeat)]
+# 안드로이드 등 클라이언트에서 Ngrok 및 네트워크 세션 유지를 위해 
+# 주기적(예: 30초)으로 호출하는 가벼운 상태 확인용 엔드포인트입니다.
+@app.get("/ping")
+async def ping():
+    return {"status": "alive", "time": datetime.now(pytz.timezone('Asia/Seoul')).isoformat()}
+
 # [chat_stream 엔드포인트]
 # 안드로이드 앱에서 가장 먼저 호출하는 문(Gate)입니다.
 # 전달받은 파라미터(text, uid, 좌표)를 정리하여 AI 스트리밍 함수로 넘겨줍니다.

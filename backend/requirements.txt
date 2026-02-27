@@ -20,3 +20,12 @@ python-multipart
 # Voice (필요 시 유지)
 # openai-whisper
 # gTTS
+
+# RAG 
+rank_bm25
+langchain
+langchain-community
+pandas
+fastparquet
+pyarrow
+psycopg2-binary

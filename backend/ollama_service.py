@@ -7,6 +7,7 @@ MODEL_3B = "legal-3b:latest"
 async def call_ollama_stream(prompt: str, model_type: str = "8b"):
     target_model = MODEL_8B if model_type == "8b" else MODEL_3B
     url = "http://ollama-server:11434/api/generate"
+    #url = "http://172.17.0.1:11434/api/generate"
     
     payload = {
         "model": target_model,
@@ -15,6 +16,7 @@ async def call_ollama_stream(prompt: str, model_type: str = "8b"):
         "options": {
             "temperature": 0.1,
             "top_p": 0.9,
+            "repeat_penalty": 1.15,
             "stop": [
                 "<|eot_id|>",
                 "<|end_of_text|>",
