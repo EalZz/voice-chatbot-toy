@@ -32,6 +32,11 @@ services:
       - ./postgres_data:/var/lib/postgresql/data
     networks:
       - voice-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d voice_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   voice-backend:
     build: ./backend
@@ -42,8 +47,10 @@ services:
       - OLLAMA_HOST=ollama-server
       - DATABASE_URL=postgresql://user:password@db:5432/voice_db
     depends_on:
-      - ollama-server
-      - db
+      ollama-server:
+        condition: service_started
+      db:
+        condition: service_healthy
     ports:
       - "8000:8000"
     networks:
