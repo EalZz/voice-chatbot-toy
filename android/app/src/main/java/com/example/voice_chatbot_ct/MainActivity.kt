@@ -23,6 +23,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +46,9 @@ import androidx.core.view.WindowCompat
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.ColorFilter
 
 data class ChatMessage(val content: String, val isUser: Boolean, val id: String = java.util.UUID.randomUUID().toString())
 
@@ -54,15 +61,19 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private var loadingJob: Job? = null
     private var isListening by mutableStateOf(false)
+    private var isAutoVoiceEnabled by mutableStateOf(true)
 
-    private lateinit var fusedLocationClient: FusedLocationProviderClient
+    // private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var currentLat: Double? = null
     private var currentLon: Double? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        
+        // fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
@@ -71,7 +82,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
         tts = TextToSpeech(this, this)
         setupSpeechRecognizer()
-        requestLocationPermission()
+        // requestLocationPermission()
 
         setContent {
             MaterialTheme(
@@ -89,6 +100,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     ChatScreen(
                         messages = chatMessages,
                         isListening = isListening,
+                        autoVoiceEnabled = isAutoVoiceEnabled,
+                        onAutoVoiceToggle = { isAutoVoiceEnabled = !isAutoVoiceEnabled },
+                        onPlayVoice = { text -> speak(text) },
                         onSendMessage = { text ->
                             if (text.isNotBlank()) {
                                 sendMessage(text)
@@ -132,7 +146,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
     private fun sendMessage(text: String) {
         addMessage(text, isUser = true)
-        addMessage("응답 중", isUser = false)
+        addMessage("Thinking", isUser = false)
         startLoadingAnimation()
 
         var fullResponse = ""
@@ -149,7 +163,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
                     if (response.token.isNotEmpty()) {
                         val currentMessage = chatMessages[lastIndex]
-                        val newContent = if (currentMessage.content.contains("응답 중")) {
+                        val newContent = if (currentMessage.content.contains("Thinking")) {
                             response.token
                         } else {
                             currentMessage.content + response.token
@@ -159,7 +173,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     }
 
                     if (response.isDone) {
-                        if (fullResponse.isNotBlank()) {
+                        if (fullResponse.isNotBlank() && isAutoVoiceEnabled) {
                             speak(fullResponse)
                         }
                     }
@@ -184,8 +198,8 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             while (isActive) {
                 val dots = ".".repeat(dotCount)
                 val lastIndex = chatMessages.size - 1
-                if (lastIndex >= 0 && !chatMessages[lastIndex].isUser && chatMessages[lastIndex].content.contains("응답 중")) {
-                    chatMessages[lastIndex] = chatMessages[lastIndex].copy(content = "응답 중$dots")
+                if (lastIndex >= 0 && !chatMessages[lastIndex].isUser && chatMessages[lastIndex].content.contains("Thinking")) {
+                    chatMessages[lastIndex] = chatMessages[lastIndex].copy(content = "Thinking$dots")
                 }
                 dotCount = if (dotCount >= 3) 1 else dotCount + 1
                 delay(500)
@@ -214,6 +228,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun requestLocationPermission() {
+        /*
         val locationPermissionRequest = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) { permissions ->
@@ -225,9 +240,11 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
         ))
+        */
     }
 
     private fun getLastLocation() {
+        /*
         try {
             fusedLocationClient.lastLocation.addOnSuccessListener { location ->
                 if (location != null) {
@@ -238,6 +255,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         } catch (e: SecurityException) {
             Log.e("GPS", "위치 권한이 없습니다.")
         }
+        */
     }
 }
 
@@ -245,6 +263,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 fun ChatScreen(
     messages: List<ChatMessage>,
     isListening: Boolean,
+    autoVoiceEnabled: Boolean,
+    onAutoVoiceToggle: () -> Unit,
+    onPlayVoice: (String) -> Unit,
     onSendMessage: (String) -> Unit,
     onVoiceClick: () -> Unit
 ) {
@@ -257,144 +278,221 @@ fun ChatScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF121212))
-            .systemBarsPadding()
-            .imePadding()
-    ) {
-        if (messages.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "무엇을 도와드릴까요?",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "본 챗봇의 내용은 참고용이며, 정확한 판단은 법률 전문가와의 상담을 권장합니다.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 32.dp)
-                )
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF121212))
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding()
+        ) {
+            if (messages.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Gavel,
+                        contentDescription = "Logo",
+                        modifier = Modifier.size(64.dp),
+                        tint = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "무엇을 도와드릴까요?",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "본 챗봇의 내용은 참고용이며, 정확한 판단은 법률 전문가와의 상담을 권장합니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(top = 80.dp, bottom = 16.dp), // Add top padding for the TopBar
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(messages, key = { it.id }) { message ->
+                        ChatBubble(message, onPlayVoice)
+                    }
+                }
             }
-        } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+
+            Surface(
+                color = Color(0xFF121212),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                items(messages, key = { it.id }) { message ->
-                    ChatBubble(message)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .background(Color(0xFF2A2A2A), CircleShape)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onVoiceClick,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(if (isListening) Color.Red else Color.Transparent, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Mic, 
+                            contentDescription = "Voice", 
+                            tint = if (isListening) Color.White else Color.Gray
+                        )
+                    }
+                    
+                    BasicTextField(
+                        value = textState,
+                        onValueChange = { textState = it },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 16.sp),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
+                        decorationBox = { innerTextField ->
+                            if (textState.text.isEmpty()) {
+                                Text("메시지를 입력하세요...", color = Color.Gray, fontSize = 16.sp)
+                            }
+                            innerTextField()
+                        }
+                    )
+                    
+                    val hasText = textState.text.trim().isNotEmpty()
+                    IconButton(
+                        onClick = {
+                            val trimmed = textState.text.trim()
+                            if (trimmed.isNotEmpty()) {
+                                onSendMessage(trimmed)
+                                textState = TextFieldValue("")
+                            }
+                        },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(if (hasText) Color.White else Color.DarkGray, CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send, 
+                            contentDescription = "Send", 
+                            tint = if (hasText) Color.Black else Color.Gray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
 
-        Surface(
-            color = Color(0xFF121212),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .background(Color(0xFF2A2A2A), CircleShape)
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onVoiceClick,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(if (isListening) Color.Red else Color.Transparent, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic, 
-                        contentDescription = "Voice", 
-                        tint = if (isListening) Color.White else Color.Gray
+        // Gradient Top Bar for Session & Voice Control
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(Color(0xFF121212), Color.Transparent)
                     )
-                }
-                
-                BasicTextField(
-                    value = textState,
-                    onValueChange = { textState = it },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp),
-                    textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 16.sp),
-                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
-                    decorationBox = { innerTextField ->
-                        if (textState.text.isEmpty()) {
-                            Text("메시지를 입력하세요...", color = Color.Gray, fontSize = 16.sp)
-                        }
-                        innerTextField()
-                    }
                 )
-                
-                val hasText = textState.text.trim().isNotEmpty()
-                IconButton(
-                    onClick = {
-                        val trimmed = textState.text.trim()
-                        if (trimmed.isNotEmpty()) {
-                            onSendMessage(trimmed)
-                            textState = TextFieldValue("")
-                        }
-                    },
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(if (hasText) Color.White else Color.DarkGray, CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send, 
-                        contentDescription = "Send", 
-                        tint = if (hasText) Color.Black else Color.Gray,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Placeholder for Session Name (Future Feature)
+            Text(
+                text = "New Chat",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+
+            // Voice Toggle Button
+            IconButton(onClick = onAutoVoiceToggle) {
+                Icon(
+                    imageVector = if (autoVoiceEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                    contentDescription = "Toggle Auto Voice",
+                    tint = if (autoVoiceEnabled) Color.White else Color.Gray
+                )
             }
         }
     }
 }
 
 @Composable
-fun ChatBubble(message: ChatMessage) {
+fun ChatBubble(message: ChatMessage, onPlayVoice: (String) -> Unit) {
     val isUser = message.isUser
-    val bubbleColor = if (isUser) Color(0xFF3F51B5) else Color(0xFF2A2A2A)
-    val textColor = Color.White
+    val isThinking = !isUser && message.content.startsWith("Thinking")
+    val bubbleColor = if (isUser) Color(0xFF2F2F2F) else Color.Transparent
+    val textColor = if (isThinking) Color.Gray else Color.White
     val shape = if (isUser) {
         RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp)
     } else {
-        RoundedCornerShape(20.dp, 20.dp, 20.dp, 4.dp)
+        RoundedCornerShape(0.dp)
     }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = 280.dp)
-                .clip(shape)
-                .background(bubbleColor)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            Text(
-                text = message.content,
-                color = textColor,
-                style = MaterialTheme.typography.bodyLarge
-            )
+        if (!isUser) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(Color(0xFF2A2A2A), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Gavel,
+                    contentDescription = "AI",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+        }
+
+        Column(horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
+            Box(
+                modifier = Modifier
+                    .widthIn(max = 280.dp)
+                    .clip(shape)
+                    .background(bubbleColor)
+                    .padding(horizontal = if (isUser) 16.dp else 4.dp, vertical = if (isUser) 12.dp else 4.dp)
+            ) {
+                Text(
+                    text = message.content,
+                    color = textColor,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+            if (!isUser && !isThinking) {
+                IconButton(
+                    onClick = { onPlayVoice(message.content) },
+                    modifier = Modifier
+                        .size(32.dp)
+                        .padding(top = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Play Voice",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
         }
     }
 }

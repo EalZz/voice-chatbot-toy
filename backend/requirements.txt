@@ -29,3 +29,5 @@ pandas
 fastparquet
 pyarrow
 psycopg2-binary
+sentence-transformers
+torch
