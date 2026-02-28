@@ -5,6 +5,8 @@
 ##  주요 특징 (Key Features)
 
 - **음성 인터페이스:** gTTS 및 OpenAI Whisper(예정)를 활용한 자연스러운 음성 대화.
+- **모던 UI/UX (Jetpack Compose):** 다크 테마 기반의 챗봇 UI, 네비게이션 서랍(Drawer)을 통한 세션 관리 및 환경설정 기능 제공.
+- **음성 제어 토글:** 사용자가 AI의 자동 음성 답변을 켜고 끌 수 있는 기능.
 - **사용자 식별:** 별도의 로그인 없이 `ANDROID_ID`를 `uid`로 사용하여 사용자별 데이터 매칭.
 - **장기 기억 (Long-term Memory):** PostgreSQL DB와 연동하여 과거 대화 기록 중 최신 4개를 맥락으로 활용하는 로직 구현.
 - **컨테이너 기반 서버:** Docker Compose를 사용하여 FastAPI, Ollama, PostgreSQL을 원클릭으로 구동.
@@ -19,7 +21,7 @@
 - **Communication:** OkHttp Streaming (Android와 통신)
 
 ### Android
-- **Language:** Kotlin
+- **Language/UI:** Kotlin, Jetpack Compose, Material Design 3
 - **Network:** OkHttp
 - **Device ID:** ANDROID_ID 기반 사용자 식별 (회원가입 추가 예정)
 
