@@ -10,6 +10,13 @@ services:
       - "11434:11434"
     networks:
       - voice-net
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   db:
     image: postgres:15-alpine
@@ -28,7 +35,7 @@ services:
 
   voice-backend:
     build: ./backend
-    image: ealz/voice-backend:v5
+    image: ealz/voice-backend:v6
     container_name: voice-backend
     restart: always
     environment:
