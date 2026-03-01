@@ -6,4 +6,11 @@
     </style>
 
     <style name="Theme.Voicechatbotcloud" parent="Base.Theme.Voicechatbotcloud" />
+
+    <!-- Splash Screen Theme -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.Voicechatbotcloud</item>
+    </style>
 </resources>

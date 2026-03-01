@@ -12,6 +12,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -49,6 +50,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 
 data class ChatMessage(val content: String, val isUser: Boolean, val id: String = java.util.UUID.randomUUID().toString())
 
@@ -68,6 +72,7 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
     private var currentLon: Double? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = android.graphics.Color.TRANSPARENT
@@ -271,75 +276,38 @@ fun ChatScreen(
 ) {
     var textState by remember { mutableStateOf(TextFieldValue("")) }
     val listState = rememberLazyListState()
+    
+    val density = LocalDensity.current
+    // val isKeyboardVisible = WindowInsets.ime.getBottom(density) > 0 // Removed as per instruction
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
     }
+    
+    // LaunchedEffect(isKeyboardVisible) { // Removed as per instruction
+    //     if (isKeyboardVisible && messages.isNotEmpty()) {
+    //         listState.animateScrollToItem(messages.size - 1)
+    //     }
+    // }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFF121212))
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .imePadding()
-        ) {
-            if (messages.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Gavel,
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(64.dp),
-                        tint = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "무엇을 도와드릴까요?",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "본 챗봇의 내용은 참고용이며, 정확한 판단은 법률 전문가와의 상담을 권장합니다.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 32.dp)
-                    )
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    contentPadding = PaddingValues(top = 80.dp, bottom = 16.dp), // Add top padding for the TopBar
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(messages, key = { it.id }) { message ->
-                        ChatBubble(message, onPlayVoice)
-                    }
-                }
-            }
-
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = Color(0xFF121212),
+        bottomBar = {
+            // Precise keyboard handling
             Surface(
-                color = Color(0xFF121212),
-                modifier = Modifier.fillMaxWidth()
+                color = Color(0xFF121212), // Match background to prevent gaps
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .navigationBarsPadding()
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                         .background(Color(0xFF2A2A2A), CircleShape)
                         .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -396,36 +364,81 @@ fun ChatScreen(
                 }
             }
         }
-
-        // Gradient Top Bar for Session & Voice Control
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(Color(0xFF121212), Color.Transparent)
+    ) { innerPadding ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (messages.isEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Gavel,
+                        contentDescription = "Logo",
+                        modifier = Modifier.size(64.dp),
+                        tint = Color.White
                     )
-                )
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Placeholder for Session Name (Future Feature)
-            Text(
-                text = "New Chat",
-                color = Color.White,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(start = 8.dp)
-            )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "무엇을 도와드릴까요?",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "본 챗봇의 내용은 참고용이며, 정확한 판단은 법률 전문가와의 상담을 권장합니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        top = 100.dp,
+                        bottom = innerPadding.calculateBottomPadding() + 8.dp,
+                        start = 16.dp,
+                        end = 16.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(messages, key = { it.id }) { message ->
+                        ChatBubble(message, onPlayVoice)
+                    }
+                }
+            }
 
-            // Voice Toggle Button
-            IconButton(onClick = onAutoVoiceToggle) {
-                Icon(
-                    imageVector = if (autoVoiceEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
-                    contentDescription = "Toggle Auto Voice",
-                    tint = if (autoVoiceEnabled) Color.White else Color.Gray
+            // Top Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(Color(0xFF121212), Color.Transparent)
+                        )
+                    )
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "New Chat",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 8.dp)
                 )
+
+                IconButton(onClick = onAutoVoiceToggle) {
+                    Icon(
+                        imageVector = if (autoVoiceEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                        contentDescription = "Toggle Auto Voice",
+                        tint = if (autoVoiceEnabled) Color.White else Color.Gray
+                    )
+                }
             }
         }
     }
@@ -435,8 +448,10 @@ fun ChatScreen(
 fun ChatBubble(message: ChatMessage, onPlayVoice: (String) -> Unit) {
     val isUser = message.isUser
     val isThinking = !isUser && message.content.startsWith("Thinking")
+    
     val bubbleColor = if (isUser) Color(0xFF2F2F2F) else Color.Transparent
     val textColor = if (isThinking) Color.Gray else Color.White
+    
     val shape = if (isUser) {
         RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp)
     } else {
@@ -445,9 +460,11 @@ fun ChatBubble(message: ChatMessage, onPlayVoice: (String) -> Unit) {
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Top
     ) {
-        if (!isUser) {
+        // AI Avatar: Thinking일 때만 노출
+        if (!isUser && isThinking) {
             Box(
                 modifier = Modifier
                     .size(36.dp)
@@ -464,13 +481,19 @@ fun ChatBubble(message: ChatMessage, onPlayVoice: (String) -> Unit) {
             Spacer(modifier = Modifier.width(12.dp))
         }
 
-        Column(horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
+        Column(
+            modifier = Modifier.weight(1f, fill = false),
+            horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
+        ) {
             Box(
                 modifier = Modifier
-                    .widthIn(max = 280.dp)
+                    .widthIn(max = if (isUser) 280.dp else 1000.dp)
                     .clip(shape)
                     .background(bubbleColor)
-                    .padding(horizontal = if (isUser) 16.dp else 4.dp, vertical = if (isUser) 12.dp else 4.dp)
+                    .padding(
+                        horizontal = if (isUser) 16.dp else 0.dp, // AI 답변은 여백 제거
+                        vertical = if (isUser) 12.dp else 4.dp
+                    )
             ) {
                 Text(
                     text = message.content,
