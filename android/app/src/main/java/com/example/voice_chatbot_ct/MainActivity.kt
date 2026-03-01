@@ -8,13 +8,12 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,54 +21,63 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Gavel
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.*
 import java.util.Locale
 import androidx.core.view.WindowCompat
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.Image
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
+import java.util.UUID
 
-data class ChatMessage(val content: String, val isUser: Boolean, val id: String = java.util.UUID.randomUUID().toString())
+// --- Enums ---
+enum class ActiveScreen {
+    Chat, Settings
+}
+
+// --- Data Models ---
+data class ChatMessage(
+    val content: String, 
+    val isUser: Boolean, 
+    val id: String = UUID.randomUUID().toString()
+)
+
+data class ChatSession(
+    val id: String = UUID.randomUUID().toString(),
+    val title: String,
+    val messages: MutableList<ChatMessage> = mutableStateListOf()
+)
 
 class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
-    private val chatMessages = mutableStateListOf<ChatMessage>()
     private lateinit var tts: TextToSpeech
     private lateinit var speechRecognizer: SpeechRecognizer
     private val streamManager = ChatStreamManager(this)
 
+    // Sessions state
+    private val sessions = mutableStateListOf<ChatSession>()
+    private var currentSessionId by mutableStateOf("")
+    
+    // UI states
     private var loadingJob: Job? = null
     private var isListening by mutableStateOf(false)
     private var isAutoVoiceEnabled by mutableStateOf(true)
-
-    // private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private var currentLat: Double? = null
-    private var currentLon: Double? = null
+    private var activeScreen by mutableStateOf(ActiveScreen.Chat)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -78,7 +86,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
         
-        // fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        if (sessions.isEmpty()) {
+            createNewSession()
+        }
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
@@ -87,7 +97,6 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
         tts = TextToSpeech(this, this)
         setupSpeechRecognizer()
-        // requestLocationPermission()
 
         setContent {
             MaterialTheme(
@@ -98,36 +107,103 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                     secondary = Color(0xFFE91E63)
                 )
             ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    ChatScreen(
-                        messages = chatMessages,
-                        isListening = isListening,
-                        autoVoiceEnabled = isAutoVoiceEnabled,
-                        onAutoVoiceToggle = { isAutoVoiceEnabled = !isAutoVoiceEnabled },
-                        onPlayVoice = { text -> speak(text) },
-                        onSendMessage = { text ->
-                            if (text.isNotBlank()) {
-                                sendMessage(text)
-                            }
-                        },
-                        onVoiceClick = {
-                            if (isListening) {
-                                speechRecognizer.stopListening()
-                            } else {
-                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.KOREAN)
+                val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                val scope = rememberCoroutineScope()
+                val currentSession = sessions.find { it.id == currentSessionId } ?: sessions[0]
+
+                if (activeScreen == ActiveScreen.Chat) {
+                    ModalNavigationDrawer(
+                        drawerState = drawerState,
+                        drawerContent = {
+                            ModalDrawerSheet(
+                                modifier = Modifier.width(300.dp).background(Color(0xFF1E1E24))
+                            ) {
+                                Spacer(modifier = Modifier.height(48.dp))
+                                
+                                NavigationDrawerItem(
+                                    label = { Text("새 채팅", color = Color.White) },
+                                    selected = false,
+                                    onClick = {
+                                        createNewSession()
+                                        scope.launch { drawerState.close() }
+                                    },
+                                    icon = { Icon(Icons.Default.Add, contentDescription = null, tint = Color.White) },
+                                    colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
+                                )
+                                
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.DarkGray)
+                                
+                                Text(
+                                    "채팅 목록",
+                                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.Gray
+                                )
+                                
+                                LazyColumn(modifier = Modifier.weight(1f)) {
+                                    items(sessions.reversed()) { session ->
+                                        NavigationDrawerItem(
+                                            label = { 
+                                                Text(
+                                                    if(session.title.isEmpty()) "새 대화" else session.title, 
+                                                    color = Color.White,
+                                                    maxLines = 1
+                                                ) 
+                                            },
+                                            selected = session.id == currentSessionId,
+                                            onClick = {
+                                                currentSessionId = session.id
+                                                scope.launch { drawerState.close() }
+                                            },
+                                            icon = { Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, tint = Color.Gray) },
+                                            colors = NavigationDrawerItemDefaults.colors(
+                                                selectedContainerColor = Color(0xFF2C2C34),
+                                                unselectedContainerColor = Color.Transparent
+                                            )
+                                        )
+                                    }
                                 }
-                                speechRecognizer.startListening(intent)
+
+                                HorizontalDivider(color = Color.DarkGray)
+                                
+                                NavigationDrawerItem(
+                                    label = { Text("환경설정", color = Color.White) },
+                                    selected = false,
+                                    onClick = {
+                                        activeScreen = ActiveScreen.Settings
+                                        scope.launch { drawerState.close() }
+                                    },
+                                    icon = { Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White) },
+                                    colors = NavigationDrawerItemDefaults.colors(unselectedContainerColor = Color.Transparent)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
                             }
                         }
+                    ) {
+                        ChatScreen(
+                            currentSession = currentSession,
+                            isListening = isListening,
+                            onSendMessage = { text -> sendMessage(text) },
+                            onVoiceClick = { toggleVoiceRecognition() },
+                            onMenuClick = { scope.launch { drawerState.open() } },
+                            onPlayVoice = { text -> speak(text) }
+                        )
+                    }
+                } else {
+                    SettingsScreen(
+                        isAutoVoiceEnabled = isAutoVoiceEnabled,
+                        onToggleVoice = { isAutoVoiceEnabled = it },
+                        onBack = { activeScreen = ActiveScreen.Chat }
                     )
                 }
             }
         }
+    }
+
+    private fun createNewSession() {
+        val newSession = ChatSession(title = "")
+        sessions.add(newSession)
+        currentSessionId = newSession.id
     }
 
     private fun setupSpeechRecognizer() {
@@ -149,7 +225,27 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         })
     }
 
+    private fun toggleVoiceRecognition() {
+        if (isListening) {
+            speechRecognizer.stopListening()
+        } else {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.KOREAN)
+            }
+            speechRecognizer.startListening(intent)
+        }
+    }
+
     private fun sendMessage(text: String) {
+        val session = sessions.find { it.id == currentSessionId } ?: return
+        
+        if (session.messages.isEmpty()) {
+            val title = if (text.length > 20) text.take(17) + "..." else text
+            val idx = sessions.indexOf(session)
+            if (idx != -1) sessions[idx] = session.copy(title = title)
+        }
+
         addMessage(text, isUser = true)
         addMessage("Thinking", isUser = false)
         startLoadingAnimation()
@@ -158,22 +254,21 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 
         lifecycleScope.launch {
             try {
-                streamManager.fetchChatStream(text, currentLat, currentLon).collect { response ->
-                    if (loadingJob != null) {
-                        stopLoadingAnimation()
-                    }
+                streamManager.fetchChatStream(text, null, null).collect { response ->
+                    if (loadingJob != null) stopLoadingAnimation()
 
-                    val lastIndex = chatMessages.size - 1
+                    val currentSession = sessions.find { it.id == currentSessionId } ?: return@collect
+                    val lastIndex = currentSession.messages.size - 1
                     if (lastIndex < 0) return@collect
 
                     if (response.token.isNotEmpty()) {
-                        val currentMessage = chatMessages[lastIndex]
+                        val currentMessage = currentSession.messages[lastIndex]
                         val newContent = if (currentMessage.content.contains("Thinking")) {
                             response.token
                         } else {
                             currentMessage.content + response.token
                         }
-                        chatMessages[lastIndex] = currentMessage.copy(content = newContent)
+                        currentSession.messages[lastIndex] = currentMessage.copy(content = newContent)
                         fullResponse += response.token
                     }
 
@@ -185,16 +280,18 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
                 }
             } catch (e: Exception) {
                 stopLoadingAnimation()
-                val lastIndex = chatMessages.size - 1
+                val currentSession = sessions.find { it.id == currentSessionId } ?: return@launch
+                val lastIndex = currentSession.messages.size - 1
                 if (lastIndex >= 0) {
-                    chatMessages[lastIndex] = chatMessages[lastIndex].copy(content = "에러가 발생했습니다: ${e.message}")
+                    currentSession.messages[lastIndex] = currentSession.messages[lastIndex].copy(content = "에러: ${e.message}")
                 }
             }
         }
     }
 
     private fun addMessage(text: String, isUser: Boolean) {
-        chatMessages.add(ChatMessage(content = text, isUser = isUser))
+        val session = sessions.find { it.id == currentSessionId } ?: return
+        session.messages.add(ChatMessage(content = text, isUser = isUser))
     }
 
     private fun startLoadingAnimation() {
@@ -202,9 +299,10 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
             var dotCount = 1
             while (isActive) {
                 val dots = ".".repeat(dotCount)
-                val lastIndex = chatMessages.size - 1
-                if (lastIndex >= 0 && !chatMessages[lastIndex].isUser && chatMessages[lastIndex].content.contains("Thinking")) {
-                    chatMessages[lastIndex] = chatMessages[lastIndex].copy(content = "Thinking$dots")
+                val currentSession = sessions.find { it.id == currentSessionId } ?: break
+                val lastIndex = currentSession.messages.size - 1
+                if (lastIndex >= 0 && !currentSession.messages[lastIndex].isUser && currentSession.messages[lastIndex].content.contains("Thinking")) {
+                    currentSession.messages[lastIndex] = currentSession.messages[lastIndex].copy(content = "Thinking$dots")
                 }
                 dotCount = if (dotCount >= 3) 1 else dotCount + 1
                 delay(500)
@@ -231,78 +329,34 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         if (::speechRecognizer.isInitialized) speechRecognizer.destroy()
         super.onDestroy()
     }
-
-    private fun requestLocationPermission() {
-        /*
-        val locationPermissionRequest = registerForActivityResult(
-            ActivityResultContracts.RequestMultiplePermissions()
-        ) { permissions ->
-            if (permissions.getOrDefault(Manifest.permission.ACCESS_FINE_LOCATION, false)) {
-                getLastLocation()
-            }
-        }
-        locationPermissionRequest.launch(arrayOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ))
-        */
-    }
-
-    private fun getLastLocation() {
-        /*
-        try {
-            fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-                if (location != null) {
-                    currentLat = location.latitude
-                    currentLon = location.longitude
-                }
-            }
-        } catch (e: SecurityException) {
-            Log.e("GPS", "위치 권한이 없습니다.")
-        }
-        */
-    }
 }
 
 @Composable
 fun ChatScreen(
-    messages: List<ChatMessage>,
+    currentSession: ChatSession,
     isListening: Boolean,
-    autoVoiceEnabled: Boolean,
-    onAutoVoiceToggle: () -> Unit,
-    onPlayVoice: (String) -> Unit,
     onSendMessage: (String) -> Unit,
-    onVoiceClick: () -> Unit
+    onVoiceClick: () -> Unit,
+    onMenuClick: () -> Unit,
+    onPlayVoice: (String) -> Unit
 ) {
+    val messages = currentSession.messages
     var textState by remember { mutableStateOf(TextFieldValue("")) }
     val listState = rememberLazyListState()
-    
-    val density = LocalDensity.current
-    // val isKeyboardVisible = WindowInsets.ime.getBottom(density) > 0 // Removed as per instruction
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
     }
-    
-    // LaunchedEffect(isKeyboardVisible) { // Removed as per instruction
-    //     if (isKeyboardVisible && messages.isNotEmpty()) {
-    //         listState.animateScrollToItem(messages.size - 1)
-    //     }
-    // }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = Color(0xFF121212),
         bottomBar = {
-            // Precise keyboard handling
             Surface(
-                color = Color(0xFF121212), // Match background to prevent gaps
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .imePadding()
-                    .navigationBarsPadding()
+                color = Color(0xFF121212),
+                modifier = Modifier.fillMaxWidth().imePadding().navigationBarsPadding()
             ) {
                 Row(
                     modifier = Modifier
@@ -318,19 +372,13 @@ fun ChatScreen(
                             .size(40.dp)
                             .background(if (isListening) Color.Red else Color.Transparent, CircleShape)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic, 
-                            contentDescription = "Voice", 
-                            tint = if (isListening) Color.White else Color.Gray
-                        )
+                        Icon(imageVector = Icons.Default.Mic, contentDescription = "Voice", tint = if (isListening) Color.White else Color.Gray)
                     }
                     
                     BasicTextField(
                         value = textState,
                         onValueChange = { textState = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 8.dp),
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                         textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 16.sp),
                         cursorBrush = androidx.compose.ui.graphics.SolidColor(Color.White),
                         decorationBox = { innerTextField ->
@@ -372,25 +420,14 @@ fun ChatScreen(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Gavel,
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(64.dp),
-                        tint = Color.White
-                    )
+                    Icon(Icons.Default.Gavel, contentDescription = "Logo", modifier = Modifier.size(64.dp), tint = Color.White)
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "무엇을 도와드릴까요?",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Color.White
-                    )
+                    Text(text = "무엇을 도와드릴까요?", style = MaterialTheme.typography.headlineMedium, color = Color.White)
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         text = "본 챗봇의 내용은 참고용이며, 정확한 판단은 법률 전문가와의 상담을 권장합니다.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 32.dp)
+                        style = MaterialTheme.typography.bodySmall, color = Color.Gray,
+                        textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp)
                     )
                 }
             } else {
@@ -400,8 +437,7 @@ fun ChatScreen(
                     contentPadding = PaddingValues(
                         top = 100.dp,
                         bottom = innerPadding.calculateBottomPadding() + 8.dp,
-                        start = 16.dp,
-                        end = 16.dp
+                        start = 16.dp, end = 16.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -411,35 +447,90 @@ fun ChatScreen(
                 }
             }
 
-            // Top Bar
-            Row(
+            // Top Bar with Gradient
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(100.dp)
                     .background(
-                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                        brush = Brush.verticalGradient(
                             colors = listOf(Color(0xFF121212), Color.Transparent)
                         )
                     )
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Text(
-                    text = "New Chat",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(start = 8.dp)
-                )
-
-                IconButton(onClick = onAutoVoiceToggle) {
-                    Icon(
-                        imageVector = if (autoVoiceEnabled) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
-                        contentDescription = "Toggle Auto Voice",
-                        tint = if (autoVoiceEnabled) Color.White else Color.Gray
-                    )
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onMenuClick) {
+                        Icon(imageVector = Icons.Default.Menu, contentDescription = "Menu", tint = Color.White)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    if (messages.isNotEmpty()) {
+                        Text(
+                            text = currentSession.title,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen(
+    isAutoVoiceEnabled: Boolean,
+    onToggleVoice: (Boolean) -> Unit,
+    onBack: () -> Unit
+) {
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        containerColor = Color(0xFF121212),
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("환경설정", color = Color.White, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("음성 출력 사용", color = Color.White, fontSize = 18.sp)
+                Switch(
+                    checked = isAutoVoiceEnabled,
+                    onCheckedChange = { onToggleVoice(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color.DarkGray,
+                        uncheckedThumbColor = Color.Gray,
+                        uncheckedTrackColor = Color.Black
+                    )
+                )
+            }
+            HorizontalDivider(color = Color.DarkGray)
         }
     }
 }
@@ -448,35 +539,20 @@ fun ChatScreen(
 fun ChatBubble(message: ChatMessage, onPlayVoice: (String) -> Unit) {
     val isUser = message.isUser
     val isThinking = !isUser && message.content.startsWith("Thinking")
-    
     val bubbleColor = if (isUser) Color(0xFF2F2F2F) else Color.Transparent
-    val textColor = if (isThinking) Color.Gray else Color.White
-    
-    val shape = if (isUser) {
-        RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp)
-    } else {
-        RoundedCornerShape(0.dp)
-    }
+    val shape = if (isUser) RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp) else RoundedCornerShape(0.dp)
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
         verticalAlignment = Alignment.Top
     ) {
-        // AI Avatar: Thinking일 때만 노출
         if (!isUser && isThinking) {
             Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(Color(0xFF2A2A2A), CircleShape),
+                modifier = Modifier.size(36.dp).background(Color(0xFF2A2A2A), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Gavel,
-                    contentDescription = "AI",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
+                Icon(Icons.Default.Gavel, contentDescription = "AI", tint = Color.White, modifier = Modifier.size(24.dp))
             }
             Spacer(modifier = Modifier.width(12.dp))
         }
@@ -490,30 +566,16 @@ fun ChatBubble(message: ChatMessage, onPlayVoice: (String) -> Unit) {
                     .widthIn(max = if (isUser) 280.dp else 1000.dp)
                     .clip(shape)
                     .background(bubbleColor)
-                    .padding(
-                        horizontal = if (isUser) 16.dp else 0.dp, // AI 답변은 여백 제거
-                        vertical = if (isUser) 12.dp else 4.dp
-                    )
+                    .padding(horizontal = if (isUser) 16.dp else 0.dp, vertical = if (isUser) 12.dp else 4.dp)
             ) {
-                Text(
-                    text = message.content,
-                    color = textColor,
-                    style = MaterialTheme.typography.bodyLarge
-                )
+                Text(text = message.content, color = if (isThinking) Color.Gray else Color.White, style = MaterialTheme.typography.bodyLarge)
             }
             if (!isUser && !isThinking) {
                 IconButton(
                     onClick = { onPlayVoice(message.content) },
-                    modifier = Modifier
-                        .size(32.dp)
-                        .padding(top = 4.dp)
+                    modifier = Modifier.size(32.dp).padding(top = 4.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Play Voice",
-                        tint = Color.Gray,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.Gray, modifier = Modifier.size(16.dp))
                 }
             }
         }
