@@ -16,24 +16,25 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
+              capabilities: [ gpu ]
 
   db:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg16
     container_name: postgres-db
     restart: always
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: voice_db
+      POSTGRES_DB: user_db
     ports:
       - "5432:5432"
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
     networks:
       - voice-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d voice_db"]
+      test: [ "CMD-SHELL", "pg_isready -U user -d voice_db" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -45,7 +46,19 @@ services:
     restart: always
     environment:
       - OLLAMA_HOST=ollama-server
-      - DATABASE_URL=postgresql://user:password@db:5432/voice_db
+      - DATABASE_URL=postgresql://user:password@db:5432/user_db
+      - KNOWLEDGE_DB_URL=postgresql://user:password@db:5432/knowledge_db
+      - PYTHONIOENCODING=utf-8
+      - LANG=C.UTF-8
+    volumes:
+      - ./backend:/app # 소스 코드 변경 시 재빌드 없이 즉시 반영
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
     depends_on:
       ollama-server:
         condition: service_started
@@ -94,16 +107,26 @@ services:
     image: prometheuscommunity/postgres-exporter
     container_name: postgres-exporter
     environment:
-      - DATA_SOURCE_NAME=postgresql://user:password@db:5432/voice_db?sslmode=disable
+      - DATA_SOURCE_NAME=postgresql://user:password@db:5432/user_db?sslmode=disable
     ports:
       - "9187:9187"
     restart: unless-stopped
     networks:
       - voice-net
 
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    restart: always
+    ports:
+      - "5050:8080"
+    networks:
+      - voice-net
+
 volumes:
   ollama_storage:
-  postgres_data:  # 데이터 영속성을 위해 명시적 선언 권장
+  postgres_data:
+
 
 networks:
   voice-net:
