@@ -1,3 +1,6 @@
+레포 이전했습니다
+https://github.com/EalZz/BaroLaw
+
 # ⚖️ BaroLaw (바로Law): 당신의 손안에 있는 법률 비서
 
 > **"바르다(Right)"** + **"Law"** = 언제든 **"바로(Right Now)"** 도움을 주는 법률 상담 AI 서비스
