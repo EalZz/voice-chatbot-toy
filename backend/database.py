@@ -141,17 +141,22 @@ def get_or_create_profile(db: Session, device_uid: str) -> Profile:
         db.refresh(profile)
     return profile
 
-def create_chat_session(db: Session, profile_id: str, first_query: str = None) -> ChatSession:
+def create_chat_session(db: Session, profile_id: str, first_query: str = None, session_id: str = None) -> ChatSession:
     """새로운 대화 세션 생성"""
     title = (first_query[:30] + '...') if first_query and len(first_query) > 30 else (first_query or "새 대화")
-    new_session = ChatSession(profile_id=profile_id, title=title)
+    
+    session_data = {"profile_id": profile_id, "title": title}
+    if session_id:
+        session_data["session_id"] = session_id
+        
+    new_session = ChatSession(**session_data)
     db.add(new_session)
     db.commit()
     db.refresh(new_session)
     return new_session
 
 def save_chat_message(db: Session, session_id: str, role: str, content: str, ref_type: str = None, ref_id: int = None):
-    """대화 메시지 저장"""
+    """대화 메시지 저장 및 세션의 updated_at 갱신"""
     msg = ChatMessage(
         session_id=session_id,
         role=role,
@@ -160,6 +165,12 @@ def save_chat_message(db: Session, session_id: str, role: str, content: str, ref
         referenced_id=ref_id
     )
     db.add(msg)
+    
+    # 세션의 updated_at을 현재 시간으로 강제 업데이트 (목록 정렬을 위함)
+    session = db.query(ChatSession).filter(ChatSession.session_id == session_id).first()
+    if session:
+        session.updated_at = func.now()
+        
     db.commit()
     db.refresh(msg)
     return msg
@@ -179,3 +190,16 @@ def get_user_sessions(db: Session, device_uid: str):
     return db.query(ChatSession)\
              .filter(ChatSession.profile_id == profile.profile_id)\
              .order_by(ChatSession.updated_at.desc()).all()
+
+def delete_chat_session(db: Session, session_id: str):
+    """특정 세션 삭제 (연관된 대화 내용도 CASCADE로 자동 삭제됨)"""
+    session = db.query(ChatSession).filter(ChatSession.session_id == session_id).first()
+    if session:
+        db.delete(session)
+        db.commit()
+        return True
+    return False
+
+# 테이블 자동 생성 (없을 경우 새로 만듦)
+Base.metadata.create_all(bind=user_engine)
+# Base.metadata.create_all(bind=knowledge_engine) # knowledge_db는 pgvector나 별도 스크립트로 초기화하는 것이 일반적임.
